@@ -43,8 +43,8 @@ def compare_gt_vs_rec():
     print(font_size)
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-    plt.plot(heights_gt,areas,  label="heights_gt Curve", linewidth=font_size * 0.2, linestyle='--')
-    plt.plot(heights_re,areas,  label="heights_re Curve", linewidth=font_size * 0.2, linestyle='--')
+    plt.plot(heights_gt, areas, label="heights_gt Curve", linewidth=font_size * 0.2, linestyle='--')
+    plt.plot(heights_re, areas, label="heights_re Curve", linewidth=font_size * 0.2, linestyle='--')
 
     plt.xlabel("H (m)")
     plt.ylabel("Area (m2)")

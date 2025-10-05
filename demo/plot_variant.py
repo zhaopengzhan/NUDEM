@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score
 
 from hydrology.water_area_curve import HypsometricCurve
 
@@ -11,8 +11,8 @@ plt.rcParams["axes.unicode_minus"] = False  # 正确显示负号
 
 def compare_gt_vs_rec():
     dem_gt_path = r'F:\BaiduNetdiskDownload\cdm_contour\小柴旦湖_utm_tmp.tif'
-    dem_re_path = r'F:\BaiduNetdiskDownload\cdm_contour\AUNDEM.tif'
-    # dem_re_path = r'F:\zpz\Projects6\临时 处理DEM数据确保画出图\裁剪代码\data\epoch_9600_real.tif'
+    # dem_re_path = r'F:\BaiduNetdiskDownload\cdm_contour\AUNDEM.tif'
+    dem_re_path = r'F:\zpz\Projects6\临时 处理DEM数据确保画出图\裁剪代码\data\epoch_9600_real.tif'
 
     with rasterio.open(dem_gt_path) as gt_ds:
         gt = gt_ds.read(1, masked=True)
@@ -22,8 +22,12 @@ def compare_gt_vs_rec():
     hc_gt = HypsometricCurve(dem=gt, pixel_area=pixel_area)
     hc_re = HypsometricCurve(dem_path=dem_re_path)
 
-    vmin, vmax = hc_gt.S[10000], hc_gt.S[-10000]
-    N_sample = 50
+    up_idx = int(len(hc_gt.S) * 0.95)
+    low_idx = int(len(hc_gt.S) * 0.6)
+    vmin, vmax = hc_gt.S[low_idx], hc_gt.S[up_idx]
+    print(len(hc_gt.S))
+    print(vmin / 1e6, vmax / 1e6)
+    N_sample = 10
     areas = np.linspace(vmin, vmax, num=N_sample)
 
     heights_gt = hc_gt.get_height_from_area(areas)
@@ -51,7 +55,6 @@ def compare_gt_vs_rec():
     print(font_size)
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-
     plt.scatter(heights_gt, heights_re, c='r', alpha=0.7, label="Observed vs Predicted")
     # 画 1:1 参考线
     min_val = min(min(heights_gt), min(heights_re))
@@ -63,7 +66,7 @@ def compare_gt_vs_rec():
 
     textstr = f"R2 = {r2:.3f}\nMSE = {mse:.3f}\nbias = {relative_bias:.2f}%"
     plt.text(0.8, 0.16, textstr, transform=plt.gca().transAxes,
-              verticalalignment='top',
+             verticalalignment='top',
              bbox=dict(boxstyle="round", facecolor="white", alpha=0.5))
 
     # plt.xlim(0, 0.03)

@@ -1,24 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import torch
-import rasterio
-import os
-from einops import rearrange
-import torch.nn.functional as F
-import glob
-from tqdm import tqdm
-from PIL import Image
-import cv2
-import geopandas as gpd
+from scipy.optimize import curve_fit
 
-plt.rcParams["font.family"] = "SimHei"
-plt.rcParams["axes.unicode_minus"] = False  # 正确显示负号
-# from sklearn.
-from sklearn.ensemble import RandomForestRegressor
 
 class AutoRegressor:
-    def __init__(self, x, y ,fit_type):
+    def __init__(self, x, y, fit_type):
 
         self.x = x
         self.y = y
@@ -36,6 +21,44 @@ class AutoRegressor:
             self._f_xy = np.poly1d(np.polyfit(x, y, 3))
             self._f_yx = np.poly1d(np.polyfit(y, x, 3))
 
+        elif fit_type == "poly4":
+            self._f_xy = np.poly1d(np.polyfit(x, y, 4))
+            self._f_yx = np.poly1d(np.polyfit(y, x, 4))
+
+        elif fit_type == "poly5":
+            self._f_xy = np.poly1d(np.polyfit(x, y, 5))
+            self._f_yx = np.poly1d(np.polyfit(y, x, 5))
+
+        elif fit_type == "exp":
+            # y = a * exp(bx)
+            def exp_func(x, a, b):
+                return a * np.exp(b * x)
+
+            popt, _ = curve_fit(exp_func, self.x, self.y, p0=(1.0, 0.1))
+            a, b = popt
+            self._f_xy = lambda t: a * np.exp(b * t)
+            self._f_yx = lambda t: (np.log(t / a)) / b
+
+        elif fit_type == "log":
+            # y = a * ln(x) + b
+            def log_func(x, a, b):
+                return a * np.log(x) + b
+
+            popt, _ = curve_fit(log_func, self.x, self.y, p0=(1.0, 1.0))
+            a, b = popt
+            self._f_xy = lambda t: a * np.log(t) + b
+            self._f_yx = lambda t: np.exp((t - b) / a)
+
+        elif fit_type == "power":
+            # y = a * x^b
+            def power_func(x, a, b):
+                return a * np.power(x, b)
+
+            popt, _ = curve_fit(power_func, self.x, self.y, p0=(1.0, 1.0))
+            a, b = popt
+            self._f_xy = lambda t: a * (t ** b)
+            self._f_yx = lambda t: (t / a) ** (1.0 / b)
+
         else:
             raise ValueError(f"Unknown fit_type: {fit_type}")
 
@@ -44,7 +67,6 @@ class AutoRegressor:
 
     def get_x_from_y(self, y):
         return self._f_yx(np.asarray(y, dtype=float))
-
 
     def show(self):
         from matplotlib import pyplot as plt
@@ -61,7 +83,7 @@ class AutoRegressor:
         fig_width, fig_height = (11, 8)
         font_size = round(fig_height * 2.25)
         plt.rcParams.update({'font.size': font_size})
-        print(font_size)
+
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
         plt.plot(x_sample, y_pred, label=f"{self.fit_type} fit line", linewidth=font_size * 0.2, zorder=1)
@@ -74,7 +96,3 @@ class AutoRegressor:
         plt.tight_layout()
         plt.show()
 
-if __name__ == '__main__':
-    main()
-
-    pass
