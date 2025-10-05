@@ -1,3 +1,4 @@
+import json
 import warnings
 
 import geopandas as gpd
@@ -133,7 +134,7 @@ def clip_raster_by_raster(src=None, ref=None, src_ds=None, ref_ds=None, output_p
         return memfile.open()
 
 
-def clip_raster_by_shp(src=None, ref=None, src_ds=None, ref_ds=None, output_path=None, scale=None,
+def clip_raster_by_rectangle(src=None, ref=None, src_ds=None, ref_ds=None, output_path=None, scale=None,
                        force_match=False):
     """
     Clip a source raster using the bounds of a reference raster.
@@ -222,3 +223,85 @@ def clip_raster_by_shp(src=None, ref=None, src_ds=None, ref_ds=None, output_path
         with memfile.open(**new_meta) as dst:
             dst.write(clipped_image)
         return memfile.open()
+
+
+def clip_raster_by_ploygon(src=None, ref=None, src_ds=None, ref_ds=None, output_path=None,
+                           force_match=False, nodata=0, dtype="float32"):
+    """
+    This function improves upon the previous `clip_raster_by_shp` implementation.
+    The earlier version clipped rasters using only the rectangular bounding box of a shapefile,
+
+    In contrast, this function uses vector geometries
+        Supported geometry types:
+        - Polygon (currently implemented)
+
+    Parameters:
+    -----------
+    src : str, optional
+        Path to the source raster file.
+    ref : str, optional
+        Path to the reference raster file.
+    src_ds : rasterio.Dataset, optional
+        Opened source raster dataset.
+    ref_ds : rasterio.Dataset, optional
+        Opened reference raster dataset.
+    output_path : str, optional
+        Path to save the clipped raster. If None, the result is returned as a MemoryFile dataset.
+
+    Returns:
+    --------
+    If output_path is provided:
+        None (saves the clipped raster to the specified path).
+    If output_path is None:
+        A rasterio.Dataset object from a MemoryFile.
+    """
+
+    # Validate inputs
+    if (src is None and src_ds is None) or (ref is None and ref_ds is None):
+        raise ValueError("Either src/ref paths or src_ds/ref_ds datasets must be provided.")
+
+    # Open datasets if paths are provided
+    if src_ds is None:
+        src_ds = rasterio.open(src)
+    if ref_ds is None:
+        ref_ds = gpd.read_file(ref)
+
+    # 如果坐标系不一致
+    if src_ds.crs != ref_ds.crs:
+        # print(f"转换坐标系: {ref_ds.crs} → {src_ds.crs}")
+        ref_ds = ref_ds.to_crs(src_ds.crs)
+        polygon_geoms = [json.loads(ref_ds.to_json())["features"][0]["geometry"]]
+    else:
+        polygon_geoms = [json.loads(ref_ds.to_json())["features"][0]["geometry"]]
+
+    # Clip the source raster using the reference bounds
+    clipped_image, clipped_transform = mask(src_ds, polygon_geoms, crop=True)
+
+    # 如果强制匹配，且clip结果长宽不完全相等，那么强制对齐一下
+    if force_match and clipped_image.shape[-2:] != ref_ds.shape[-2:]:  # 忽略波段维度
+        target_height, target_width = ref_ds.shape[-2:]
+        clipped_image = clipped_image[..., :target_height, :target_width]
+        clipped_transform = ref_ds.transform
+
+    # Prepare metadata for the clipped raster
+    new_meta = src_ds.meta.copy()
+    new_meta.update({
+        "height": clipped_image.shape[1],
+        "width": clipped_image.shape[2],
+        "transform": clipped_transform,
+        "nodata": nodata,
+        "dtype": dtype,
+    })
+
+    # Save to output path or return as MemoryFile dataset
+    if output_path:
+        with rasterio.open(output_path, "w", **new_meta) as dst:
+            dst.write(clipped_image)
+        return output_path
+    else:
+        # Save to MemoryFile
+        memfile = MemoryFile()
+        with memfile.open(**new_meta) as dst:
+            dst.write(clipped_image)
+        return memfile.open()
+
